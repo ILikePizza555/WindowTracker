@@ -66,6 +66,22 @@ namespace WindowTracker
     {
         [DllImport("user32.dll", SetLastError = true)]
         public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+        [DllImport("Kernel32")]
+        public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
+
+        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+
+        // An enumerated type for the control messages
+        // sent to the handler routine.
+        public enum CtrlTypes
+        {
+            CTRL_C_EVENT = 0,
+            CTRL_BREAK_EVENT,
+            CTRL_CLOSE_EVENT,
+            CTRL_LOGOFF_EVENT = 5,
+            CTRL_SHUTDOWN_EVENT
+        }
     }
 
     class Program
@@ -74,26 +90,7 @@ namespace WindowTracker
 
         static void Main(string[] args)
         {
-            DateTime now = DateTime.Now;
-            String logFilePath = Path.Combine(Directory.GetCurrentDirectory(), "WindowTracker", $"{now.Year}-{now.Month}-{now.Day}-{now.Hour}-{now.Minute}.log");
-
-            //Logging
-            Trace.Listeners.Clear();
-
-            TextWriterTraceListener twtl =
-                new TextWriterTraceListener(logFilePath)
-                {
-                    Name = "WindowTracker",
-                    TraceOutputOptions = TraceOptions.ThreadId | TraceOptions.DateTime
-                };
-
-            ConsoleTraceListener ctl = new ConsoleTraceListener(false) {TraceOutputOptions = TraceOptions.DateTime};
-
-            Trace.Listeners.Add(twtl);
-            Trace.Listeners.Add(ctl);
-            Trace.AutoFlush = true;
-
-            Trace.WriteLine("Saving log to '" + logFilePath + "'");
+            Console.WriteLine("Starting WindowTracker...");
 
             IntPtr hHook = WinEvents.SetWinEventHook(WinEvents.EVENT_OBJECT_CREATE, 
                 WinEvents.EVENT_OBJECT_DESTROY,
@@ -110,7 +107,7 @@ namespace WindowTracker
             {
                 if (messageResult < 0)
                 {
-                    Trace.WriteLine("Error in the message loop: " + messageResult);
+                    Console.WriteLine("Error in the message loop: " + messageResult);
                 }
                 else
                 {
@@ -141,17 +138,16 @@ namespace WindowTracker
             try
             {
                 if (eventType == WinEvents.EVENT_OBJECT_CREATE)
-                    Trace.WriteLine($"[{processId}] '{p.MainModule.ModuleName}' created a Window.");
+                    Console.WriteLine("[{0}] '{1}' created a Window.", processId, p.MainModule.ModuleName);
                 else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
-                    Trace.WriteLine($"[{processId}] '{p.MainModule.ModuleName}' destroyed a Window.");
+                    Console.WriteLine("[{0}] '{1}' destroyed a Window.", processId,p.MainModule.ModuleName);
 
-                Trace.WriteLine(
-                    $"\tCPU - Total: {p.TotalProcessorTime} User: {p.UserProcessorTime} Privileged: {p.PrivilegedProcessorTime}");
-            } catch (Win32Exception e)
+                Console.WriteLine("\tCPU - Total: {0} User: {1} Privileged: {2}", p.TotalProcessorTime,p.UserProcessorTime, p.PrivilegedProcessorTime);
+            }
+            catch (Win32Exception e)
             {
-                Trace.WriteLine(
-                    $"Error getting process information. PID: {processId} Event Type: {eventType} hWnd: {hwnd}");
-                Trace.WriteLine("\tError Message: " + e.Message);
+                Console.WriteLine("Error getting process information. PID: {0} Event Type: {1} hWnd: {2}", processId, eventType, hwnd);
+                Console.WriteLine("\tError Message: " + e.Message);
             }
         }
     }
