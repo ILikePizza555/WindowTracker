@@ -10,42 +10,46 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using WindowTracker.PInvoke;
+using WindowTracker.UI;
+using Process = System.Diagnostics.Process;
 
 namespace WindowTracker
 {
     class Program
     {
-        static WinEventDelegate procDelegate = new WinEventDelegate(EventHandler);
+        static readonly WinEventDelegate ProcDelegate = new WinEventDelegate(EventHandler);
+        private static MainWindow mainWindow;
 
+        [STAThread]
         static void Main(string[] args)
         {
             Console.WriteLine("Starting WindowTracker...");
+            mainWindow = new MainWindow();
 
-            IntPtr hHook = User32.SetWinEventHook(User32.EVENT_OBJECT_CREATE, 
+            IntPtr consoleHook = User32.SetWinEventHook(User32.EVENT_OBJECT_CREATE, 
                 User32.EVENT_OBJECT_DESTROY,
                 IntPtr.Zero,
-                procDelegate, 
+                ProcDelegate, 
                 0, 
                 0, 
                 User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
 
-            //Windows Event Loop
-            int messageResult;
-            Message m = new Message();
-            while ((messageResult = User32.GetMessage(ref m, IntPtr.Zero, 0, 0)) != 0)
-            {
-                if (messageResult < 0)
-                {
-                    Console.WriteLine("Error in the message loop: " + messageResult);
-                }
-                else
-                {
-                    User32.TranslateMessage(ref m);
-                    User32.DispatchMessage(ref m);
-                }
-            }
+            IntPtr uiHook = User32.SetWinEventHook(
+                User32.EVENT_OBJECT_CREATE,
+                User32.EVENT_OBJECT_DESTROY,
+                IntPtr.Zero, 
+                mainWindow.EventDelegate,
+                0,
+                0,
+                User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
 
-            User32.UnhookWinEvent(hHook);
+            //Start out application (which also starts en event loop)
+            UIApplication app = new UIApplication();
+            app.InitializeComponent();
+            app.Run(mainWindow);
+
+            User32.UnhookWinEvent(consoleHook);
+            User32.UnhookWinEvent(uiHook);
         }
 
         static void EventHandler(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
@@ -99,6 +103,7 @@ namespace WindowTracker
                     DateTime.Now,
                     eventType,
                     processId);
+                Console.WriteLine("\tError Message: " + e.Message);
             }
         }
     }
