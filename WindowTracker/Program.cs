@@ -9,117 +9,30 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using WindowTracker.PInvoke;
 
 namespace WindowTracker
 {
-    sealed class WinMessages
-    {
-        [StructLayout(LayoutKind.Sequential)]
-        public struct Point
-        {
-            public Int32 x;
-            public Int32 y;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        public struct Message
-        {
-            public IntPtr hWind;
-            public uint message;
-            public UIntPtr wParam;
-            public IntPtr lParam;
-            public UInt32 time;
-            public Point pt;
-        }
-
-        [DllImport("user32.dll")]
-        public static extern int GetMessage(ref Message lpMesage, IntPtr hWind, uint wMsgFilterMin, uint wMsgFilterMax);
-
-        [DllImport("user32.dll")]
-        public static extern bool TranslateMessage(ref Message lpMessage);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr DispatchMessage(ref Message lpMessage);
-    }
-    
-    sealed class WinEvents
-    {
-        public const uint WINEVENT_OUTOFCONTEXT = 0;
-        public const uint WINEVENT_SKIPOWNTHREAD = 1;
-        public const uint WINEVENT_SKIPOWNPROCESS = 2;
-        public const uint WINEVENT_INCONTEXT = 4;
-
-        public const uint EVENT_OBJECT_CREATE = 0x8000;
-        public const uint EVENT_OBJECT_DESTROY = 0x8001;
-
-        public delegate void WinEventDelegate(
-            IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
-
-        [DllImport("user32.dll")]
-        public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
-            WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
-        
-        [DllImport("user32.dll")]
-        public static extern bool UnhookWinEvent(IntPtr hook);
-    }
-
-    sealed class Windows
-    {
-        public const uint THREAD_ALL_ACCESS = 0x001F03FF;
-
-        [DllImport("user32.dll", SetLastError = true)]
-        public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
-
-        [DllImport("Kernel32.dll")]
-        public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
-
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        public static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
-
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        public static extern bool CloseHandle(IntPtr hObject);
-
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        public static extern uint SuspendThread(IntPtr hThread);
-
-        [DllImport("Kernel32.dll", SetLastError = true)]
-        public static extern uint ResumeThread(IntPtr hThread);
-
-        public delegate bool HandlerRoutine(CtrlTypes ctrlType);
-
-        // An enumerated type for the control messages
-        // sent to the handler routine.
-        [SuppressMessage("ReSharper", "InconsistentNaming")]
-        public enum CtrlTypes
-        {
-            CTRL_C_EVENT = 0,
-            CTRL_BREAK_EVENT,
-            CTRL_CLOSE_EVENT,
-            CTRL_LOGOFF_EVENT = 5,
-            CTRL_SHUTDOWN_EVENT
-        }
-    }
-
     class Program
     {
-        static WinEvents.WinEventDelegate procDelegate = new WinEvents.WinEventDelegate(EventHandler);
+        static WinEventDelegate procDelegate = new WinEventDelegate(EventHandler);
 
         static void Main(string[] args)
         {
             Console.WriteLine("Starting WindowTracker...");
 
-            IntPtr hHook = WinEvents.SetWinEventHook(WinEvents.EVENT_OBJECT_CREATE, 
-                WinEvents.EVENT_OBJECT_DESTROY,
+            IntPtr hHook = User32.SetWinEventHook(User32.EVENT_OBJECT_CREATE, 
+                User32.EVENT_OBJECT_DESTROY,
                 IntPtr.Zero,
                 procDelegate, 
                 0, 
                 0, 
-                WinEvents.WINEVENT_OUTOFCONTEXT | WinEvents.WINEVENT_SKIPOWNPROCESS);
+                User32.WINEVENT_OUTOFCONTEXT | User32.WINEVENT_SKIPOWNPROCESS);
 
             //Windows Event Loop
             int messageResult;
-            WinMessages.Message m = new WinMessages.Message();
-            while ((messageResult = WinMessages.GetMessage(ref m, IntPtr.Zero, 0, 0)) != 0)
+            Message m = new Message();
+            while ((messageResult = User32.GetMessage(ref m, IntPtr.Zero, 0, 0)) != 0)
             {
                 if (messageResult < 0)
                 {
@@ -127,12 +40,12 @@ namespace WindowTracker
                 }
                 else
                 {
-                    WinMessages.TranslateMessage(ref m);
-                    WinMessages.DispatchMessage(ref m);
+                    User32.TranslateMessage(ref m);
+                    User32.DispatchMessage(ref m);
                 }
             }
 
-            WinEvents.UnhookWinEvent(hHook);
+            User32.UnhookWinEvent(hHook);
         }
 
         static void EventHandler(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
@@ -143,7 +56,7 @@ namespace WindowTracker
             }
 
             uint processId;
-            Windows.GetWindowThreadProcessId(hwnd, out processId);
+            User32.GetWindowThreadProcessId(hwnd, out processId);
 
             if (processId == 0) return;
 
@@ -151,13 +64,13 @@ namespace WindowTracker
             {
                 Process p = Process.GetProcessById((int) processId);
 
-                if (eventType == WinEvents.EVENT_OBJECT_CREATE)
+                if (eventType == User32.EVENT_OBJECT_CREATE)
                     Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) created a Window.",
                         DateTime.Now,
                         p.MainModule.ModuleName,
                         processId,
                         dwEventThread);
-                else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
+                else if (eventType == User32.EVENT_OBJECT_DESTROY)
                     Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) destroyed a Window.",
                         DateTime.Now,
                         p.MainModule.ModuleName,
