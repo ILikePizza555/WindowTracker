@@ -1,7 +1,9 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -63,16 +65,31 @@ namespace WindowTracker
 
     sealed class Windows
     {
+        public const uint THREAD_ALL_ACCESS = 0x001F03FF;
+
         [DllImport("user32.dll", SetLastError = true)]
         public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
 
-        [DllImport("Kernel32")]
+        [DllImport("Kernel32.dll")]
         public static extern bool SetConsoleCtrlHandler(HandlerRoutine Handler, bool Add);
 
-        public delegate bool HandlerRoutine(CtrlTypes CtrlType);
+        [DllImport("Kernel32.dll", SetLastError = true)]
+        public static extern IntPtr OpenThread(uint dwDesiredAccess, bool bInheritHandle, uint dwThreadId);
+
+        [DllImport("Kernel32.dll", SetLastError = true)]
+        public static extern bool CloseHandle(IntPtr hObject);
+
+        [DllImport("Kernel32.dll", SetLastError = true)]
+        public static extern uint SuspendThread(IntPtr hThread);
+
+        [DllImport("Kernel32.dll", SetLastError = true)]
+        public static extern uint ResumeThread(IntPtr hThread);
+
+        public delegate bool HandlerRoutine(CtrlTypes ctrlType);
 
         // An enumerated type for the control messages
         // sent to the handler routine.
+        [SuppressMessage("ReSharper", "InconsistentNaming")]
         public enum CtrlTypes
         {
             CTRL_C_EVENT = 0,
@@ -135,12 +152,14 @@ namespace WindowTracker
                 Process p = Process.GetProcessById((int) processId);
 
                 if (eventType == WinEvents.EVENT_OBJECT_CREATE)
-                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) created a Window.", DateTime.Now,
+                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) created a Window.",
+                        DateTime.Now,
                         p.MainModule.ModuleName,
                         processId,
                         dwEventThread);
                 else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
-                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) destroyed a Window.", DateTime.Now,
+                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) destroyed a Window.",
+                        DateTime.Now,
                         p.MainModule.ModuleName,
                         processId,
                         dwEventThread);
@@ -155,13 +174,15 @@ namespace WindowTracker
             }
             catch (Win32Exception e)
             {
-                Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting process information. PID: {1} Event Type: {2} hWnd: {3}", 
+                Console.WriteLine(
+                    "[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting process information. PID: {1} Event Type: {2} hWnd: {3}",
                     DateTime.Now, processId, eventType, hwnd);
                 Console.WriteLine("\tError Message: " + e.Message);
             }
             catch (ArgumentException e)
             {
-                Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting event '{1}' for process {2}: The process had terminated.", 
+                Console.WriteLine(
+                    "[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting event '{1}' for process {2}: The process had terminated.",
                     DateTime.Now,
                     eventType,
                     processId);
