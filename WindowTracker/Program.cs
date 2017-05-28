@@ -74,13 +74,16 @@ namespace WindowTracker
 
         static void Main(string[] args)
         {
+            DateTime now = DateTime.Now;
+            String logFilePath = Path.Combine(Directory.GetCurrentDirectory(), "WindowTracker", $"{now.Year}-{now.Month}-{now.Day}-{now.Hour}-{now.Minute}.log");
+
             //Logging
             Trace.Listeners.Clear();
 
             TextWriterTraceListener twtl =
-                new TextWriterTraceListener(Path.Combine(Path.GetTempPath(), AppDomain.CurrentDomain.FriendlyName))
+                new TextWriterTraceListener(logFilePath)
                 {
-                    Name = $"WindowTracker-{DateTime.Now}",
+                    Name = "WindowTracker",
                     TraceOutputOptions = TraceOptions.ThreadId | TraceOptions.DateTime
                 };
 
@@ -89,6 +92,8 @@ namespace WindowTracker
             Trace.Listeners.Add(twtl);
             Trace.Listeners.Add(ctl);
             Trace.AutoFlush = true;
+
+            Trace.WriteLine("Saving log to '" + logFilePath + "'");
 
             IntPtr hHook = WinEvents.SetWinEventHook(WinEvents.EVENT_OBJECT_CREATE, 
                 WinEvents.EVENT_OBJECT_DESTROY,
@@ -129,21 +134,24 @@ namespace WindowTracker
             uint processId;
             Windows.GetWindowThreadProcessId(hwnd, out processId);
 
+            if (processId == 0) return;
+
             Process p = Process.GetProcessById((int) processId);
 
             try
             {
                 if (eventType == WinEvents.EVENT_OBJECT_CREATE)
-                    Trace.WriteLine($"Process {processId} '{p.MainModule.ModuleName}' created a Window.");
+                    Trace.WriteLine($"[{processId}] '{p.MainModule.ModuleName}' created a Window.");
                 else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
-                    Trace.WriteLine($"Process {processId} '{p.MainModule.ModuleName}' destroyed a Window.");
+                    Trace.WriteLine($"[{processId}] '{p.MainModule.ModuleName}' destroyed a Window.");
 
-                Console.WriteLine(
+                Trace.WriteLine(
                     $"\tCPU - Total: {p.TotalProcessorTime} User: {p.UserProcessorTime} Privileged: {p.PrivilegedProcessorTime}");
             } catch (Win32Exception e)
             {
-                Console.WriteLine(
+                Trace.WriteLine(
                     $"Error getting process information. PID: {processId} Event Type: {eventType} hWnd: {hwnd}");
+                Trace.WriteLine("\tError Message: " + e.Message);
             }
         }
     }
