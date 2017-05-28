@@ -51,13 +51,12 @@ namespace WindowTracker
         public const uint EVENT_OBJECT_DESTROY = 0x8001;
 
         public delegate void WinEventDelegate(
-            IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread,
-            uint dwmsEventTime);
+            IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
 
         [DllImport("user32.dll")]
         public static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc,
             WinEventDelegate lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
-
+        
         [DllImport("user32.dll")]
         public static extern bool UnhookWinEvent(IntPtr hook);
     }
@@ -119,9 +118,7 @@ namespace WindowTracker
             WinEvents.UnhookWinEvent(hHook);
         }
 
-        static void EventHandler(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild,
-            uint dwEventThread,
-            uint dwmsEventTime)
+        static void EventHandler(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
         {
             if (idObject != 0 || idChild != 0)
             {
@@ -133,21 +130,41 @@ namespace WindowTracker
 
             if (processId == 0) return;
 
-            Process p = Process.GetProcessById((int) processId);
-
             try
             {
-                if (eventType == WinEvents.EVENT_OBJECT_CREATE)
-                    Console.WriteLine("[{0}] '{1}' created a Window.", processId, p.MainModule.ModuleName);
-                else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
-                    Console.WriteLine("[{0}] '{1}' destroyed a Window.", processId,p.MainModule.ModuleName);
+                Process p = Process.GetProcessById((int) processId);
 
-                Console.WriteLine("\tCPU - Total: {0} User: {1} Privileged: {2}", p.TotalProcessorTime,p.UserProcessorTime, p.PrivilegedProcessorTime);
+                if (eventType == WinEvents.EVENT_OBJECT_CREATE)
+                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) created a Window.", DateTime.Now,
+                        p.MainModule.ModuleName,
+                        processId,
+                        dwEventThread);
+                else if (eventType == WinEvents.EVENT_OBJECT_DESTROY)
+                    Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] '{1}' (PID: {2}; TID:{3}) destroyed a Window.", DateTime.Now,
+                        p.MainModule.ModuleName,
+                        processId,
+                        dwEventThread);
+
+                Console.WriteLine("\tCPU - Total: {0} User: {1} Privileged: {2}", p.TotalProcessorTime,
+                    p.UserProcessorTime, p.PrivilegedProcessorTime);
+
+                foreach (ProcessModule pModule in p.Modules)
+                {
+                    Console.WriteLine("\tLoaded Module: {0}\t\tSize: {1}", pModule.ModuleName, pModule.ModuleMemorySize);
+                }
             }
             catch (Win32Exception e)
             {
-                Console.WriteLine("Error getting process information. PID: {0} Event Type: {1} hWnd: {2}", processId, eventType, hwnd);
+                Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting process information. PID: {1} Event Type: {2} hWnd: {3}", 
+                    DateTime.Now, processId, eventType, hwnd);
                 Console.WriteLine("\tError Message: " + e.Message);
+            }
+            catch (ArgumentException e)
+            {
+                Console.WriteLine("[{0:yyyy-MM-dd HH:mm:ss:fff}] Error getting event '{1}' for process {2}: The process had terminated.", 
+                    DateTime.Now,
+                    eventType,
+                    processId);
             }
         }
     }
